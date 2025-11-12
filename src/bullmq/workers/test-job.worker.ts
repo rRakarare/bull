@@ -1,6 +1,7 @@
 import { queue } from "../queues";
 import type { AppJobRegistry } from "../jobs";
 import type { ProcessorFor } from "../registry";
+import { db } from "@/db/drizzle";
 
 /**
  * Test Job Processor
@@ -17,7 +18,9 @@ export const testJobProcessor: ProcessorFor<
   console.log("Processing test job:", data);
   console.log("Message:", data.message);
 
-  console.log("Current users in the database:", 22);
+  const user = await db.query.user.findMany();
+
+  console.log("Current users in the database:", user.length);
 
   console.log("Job executed successfully");
 
