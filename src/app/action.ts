@@ -1,7 +1,7 @@
 "use server";
 
-import { queue } from "@/bullmq";
+import { queue } from "@/bullmq/jobs";
 
 export const runBull = async () => {
-  queue.add("test-job", { message: "Hello, BullMQ!" });
+  await queue.add("test-job", { message: "Hello, BullMQ!" });
 };
