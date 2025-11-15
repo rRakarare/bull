@@ -18,13 +18,12 @@ const config = {
 // Type-safe job processor (no result type needed)
 type JobProcessor<TData> = (job: Job<TData>) => Promise<void>;
 
-// Type-safe queue class
-export class TypedQueue<TJobs extends Record<string, any>> {
-  private queue: Queue;
+// Type-safe queue class that extends BullMQ Queue
+export class TypedQueue<TJobs extends Record<string, any>> extends Queue {
   private processors = new Map<keyof TJobs, JobProcessor<any>>();
 
   constructor(queueName: string) {
-    this.queue = new Queue(queueName, {
+    super(queueName, {
       connection: redis,
       defaultJobOptions: {
         attempts: config.defaultAttempts,
@@ -52,13 +51,13 @@ export class TypedQueue<TJobs extends Record<string, any>> {
     data: TJobs[K],
     options?: Parameters<Queue["add"]>[2]
   ): Promise<Job<TJobs[K]>> {
-    return this.queue.add(String(jobName), data, options) as Promise<Job<TJobs[K]>>;
+    return super.add(String(jobName), data, options) as Promise<Job<TJobs[K]>>;
   }
 
   // Create worker that processes all registered jobs
   createWorker(options?: Partial<WorkerOptions>): Worker {
     const worker = new Worker(
-      this.queue.name,
+      this.name,
       async (job) => {
         const processor = this.processors.get(job.name as keyof TJobs);
         if (!processor) {
@@ -78,18 +77,14 @@ export class TypedQueue<TJobs extends Record<string, any>> {
     );
 
     worker.on("completed", (job) => {
-      console.log(`[${this.queue.name}] ${job.name}#${job.id} completed`);
+      console.log(`[${this.name}] ${job.name}#${job.id} completed`);
     });
 
     worker.on("failed", (job, err) => {
-      console.error(`[${this.queue.name}] ${job?.name}#${job?.id} failed:`, err.message);
+      console.error(`[${this.name}] ${job?.name}#${job?.id} failed:`, err.message);
     });
 
-    console.log(`Worker created: ${this.queue.name}`);
+    console.log(`Worker created: ${this.name}`);
     return worker;
-  }
-
-  async close(): Promise<void> {
-    await this.queue.close();
   }
 }

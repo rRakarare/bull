@@ -1,6 +1,5 @@
-import { Queue } from "bullmq";
-import { redis } from "@/db/redis/config";
-import { NextRequest } from "next/server";
+import { queue, type JobProgressData } from "@/bullmq/jobs";
+import type { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +13,6 @@ export async function GET(
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const queue = new Queue("main", { connection: redis });
-
       try {
         // Get the job
         const job = await queue.getJob(jobId);
@@ -24,20 +21,19 @@ export async function GET(
           const data = JSON.stringify({ error: "Job not found" });
           controller.enqueue(encoder.encode(`data: ${data}\n\n`));
           controller.close();
-          await queue.close();
           return;
         }
 
         // Send initial state
         const initialState = await job.getState();
-        const initialProgress = job.progress || { progress: 0, message: "Starting..." };
+        const progressData = (job.progress as JobProgressData) || {
+          progress: 0,
+          message: "Starting...",
+        };
         const initialData = JSON.stringify({
           state: initialState,
-          progress: typeof initialProgress === "object" ? initialProgress.progress : 0,
-          message:
-            typeof initialProgress === "object"
-              ? initialProgress.message
-              : "Starting...",
+          progress: progressData.progress,
+          message: progressData.message,
         });
         controller.enqueue(encoder.encode(`data: ${initialData}\n\n`));
 
@@ -51,7 +47,6 @@ export async function GET(
             controller.enqueue(encoder.encode(`data: ${failedData}\n\n`));
           }
           controller.close();
-          await queue.close();
           return;
         }
 
@@ -67,16 +62,15 @@ export async function GET(
             }
 
             const state = await currentJob.getState();
-            const progress = currentJob.progress || {
+            const progressData = (currentJob.progress as JobProgressData) || {
               progress: 0,
               message: "Processing...",
             };
 
             const data = JSON.stringify({
               state,
-              progress: typeof progress === "object" ? progress.progress : progress,
-              message:
-                typeof progress === "object" ? progress.message : "Processing...",
+              progress: progressData.progress,
+              message: progressData.message,
             });
 
             controller.enqueue(encoder.encode(`data: ${data}\n\n`));
@@ -92,7 +86,6 @@ export async function GET(
               }
               clearInterval(pollInterval);
               controller.close();
-              await queue.close();
             }
           } catch (error) {
             console.error("Error polling job:", error);
@@ -102,7 +95,6 @@ export async function GET(
             });
             controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
             controller.close();
-            await queue.close();
           }
         }, 500); // Poll every 500ms
 
@@ -110,7 +102,6 @@ export async function GET(
         request.signal.addEventListener("abort", () => {
           clearInterval(pollInterval);
           controller.close();
-          queue.close();
         });
       } catch (error) {
         console.error("SSE error:", error);
@@ -119,7 +110,6 @@ export async function GET(
         });
         controller.enqueue(encoder.encode(`data: ${errorData}\n\n`));
         controller.close();
-        await queue.close();
       }
     },
   });

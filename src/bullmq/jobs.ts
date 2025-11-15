@@ -12,5 +12,13 @@ export type AppJobs = {
   // "process-upload": { fileId: string; userId: string };
 };
 
+/**
+ * Job progress data structure for real-time updates
+ */
+export type JobProgressData = {
+  progress: number;
+  message: string;
+};
+
 // Export typed queue instance
 export const queue = new TypedQueue<AppJobs>("main");
