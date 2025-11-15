@@ -3,5 +3,6 @@
 import { queue } from "@/bullmq/jobs";
 
 export const runBull = async () => {
-  await queue.add("test-job", { message: "Hello, BullMQ!" });
+  const job = await queue.add("test-job", { message: "Hello, BullMQ!" });
+  return { jobId: job.id };
 };
